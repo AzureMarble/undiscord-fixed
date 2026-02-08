@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            Undiscord
 // @description     Delete all messages in a Discord channel or DM (Bulk deletion)
-// @version         5.2.8
+// @version         5.2.7
 // @author          victornpb - corrected by agblacky
 // @homepageURL     https://github.com/victornpb/undiscord
 // @supportURL      https://github.com/victornpb/undiscord/discussions
@@ -148,7 +148,7 @@
 `;
 
   var undiscordTemplate = `
-<div id="undiscord" class="browser container redact" style="display:none;">
+<div id="undiscord" class="browser container" style="display:none;">
     <div class="header">
         <svg class="icon" aria-hidden="false" width="24" height="24" viewBox="0 0 24 24">
             <path fill="currentColor" d="M15 3.999V2H9V3.999H3V5.999H21V3.999H15Z"></path>
@@ -376,7 +376,7 @@
                     <button id="stop" class="sizeMedium" title="Stop the deletion process" disabled>🛑 Stop</button>
                     <button id="clear" class="sizeMedium">Clear log</button>
                     <label class="row" title="Hide sensitive information on your screen for taking screenshots">
-                        <input id="redact" type="checkbox" checked> Streamer mode
+                        <input id="redact" type="checkbox"> Streamer mode
                     </label>
                 </div>
                 <div class="row">
@@ -501,6 +501,7 @@
       delCount: 0,
       failCount: 0,
       grandTotal: 0,
+      newTotal: 0,
       offset: 0,
       iterations: 0,
 
@@ -529,6 +530,7 @@
         delCount: 0,
         failCount: 0,
         grandTotal: 0,
+        newTotal: 0,
         offset: 0,
         iterations: 0,
 
@@ -599,7 +601,7 @@
         // Process results and find which messages should be deleted
         await this.filterResponse();
         log.verb(
-          `Grand total: ${this.state.grandTotal}`,
+          `Grand total: ${this.state.newTotal}`,
           `(Messages in current page: ${this.state._seachResponse.messages.length}`,
           `To be deleted: ${this.state._messagesToDelete.length}`,
           `Skipped: ${this.state._skippedMessages.length})`,
@@ -607,42 +609,26 @@
         );
         this.printStats();
         // if there are messages to delete, delete them
-        if (this.state._messagesToDelete.length > 0) {
+        if (
+          this.state.newTotal > 0 &&
+          this.state.grandTotal > this.state.delCount
+        ) {
           // Calculate estimated time
           this.calcEtr();
           log.verb(`Estimated time remaining: ${msToHMS(this.stats.etr)}`);
           log.verb('Resetting skippedPages counter');
           this.skippedPages = 0;
           await this.deleteMessagesFromList();
-        } else if (this.state._skippedMessages.length > 0) {
-          // There are stuff, but nothing to delete (example a page full of system messages)
-          // check next page until we see a page with nothing in it (end of results).
-          const oldOffset = this.state.offset;
-          //this.state.offset += this.state._skippedMessages.length;
-          this.skippedPages += 1;
+          // wait before next page (fix search page not updating fast enough)
           log.verb(
-            "There's nothing we can delete on this page, checking next page...",
+            `Waiting ${(this.options.searchDelay / 1000).toFixed(
+              2,
+            )}s before next page...`,
           );
-          log.verb(
-            `Skipped ${this.state._skippedMessages.length} out of ${this.state._seachResponse.messages.length} in this page.`,
-            `(Offset was ${oldOffset}, ajusted to ${this.state.offset})`,
-          );
-        } else if (this.skippedPages > 10) {
-          log.verb('Ended because API returned too many empty pages.');
-          log.verb('[End state]', this.state);
-          if (isJob) break; // break without stopping if this is part of a job
-          this.state.running = false;
+          await wait(this.options.searchDelay);
         } else {
           this.state.running = false;
         }
-
-        // wait before next page (fix search page not updating fast enough)
-        log.verb(
-          `Waiting ${(this.options.searchDelay / 1000).toFixed(
-            2,
-          )}s before next page...`,
-        );
-        await wait(this.options.searchDelay);
       } while (this.state.running);
 
       this.stats.endTime = new Date();
@@ -806,6 +792,7 @@
       // the search total will decrease as we delete stuff
       const total = data.total_results;
       if (total > this.state.grandTotal) this.state.grandTotal = total;
+      this.state.newTotal = total;
 
       // search returns messages near the the actual message, only get the messages we searched for.
       const discoveredMessages = data.messages.map(convo =>
@@ -814,18 +801,15 @@
 
       // we can only delete some types of messages, system messages are not deletable.
       let messagesToDelete = discoveredMessages;
-      messagesToDelete = messagesToDelete.filter(
-        msg => msg.type === 0 || (msg.type >= 6 && msg.type <= 21),
-      );
-      messagesToDelete = messagesToDelete.filter(msg =>
-        msg.pinned ? this.options.includePinned : true,
-      );
 
       // custom filter of messages
       try {
         const regex = new RegExp(this.options.pattern, 'i');
-        messagesToDelete = messagesToDelete.filter(msg =>
-          regex.test(msg.content),
+        messagesToDelete = messagesToDelete.filter(
+          msg =>
+            (msg.type === 0 || (msg.type >= 6 && msg.type <= 21)) &&
+            (msg.pinned ? this.options.includePinned : true) &&
+            (this.options.pattern != null ? regex.test(msg.content) : true),
         );
       } catch (e) {
         log.warn('Ignoring RegExp because pattern is malformed!', e);
