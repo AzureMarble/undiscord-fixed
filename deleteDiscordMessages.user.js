@@ -765,7 +765,7 @@
 
           this.stats.throttledCount++;
           this.stats.throttledTotalTime += w;
-          this.options.searchDelay += 50; // increase delay
+          //this.options.searchDelay += 50; // increase delay
           log.warn(`Being rate limited by the API for ${w}ms! Waiting 10s...`);
           this.printStats();
 
