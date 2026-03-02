@@ -769,7 +769,7 @@
           log.warn(`Being rate limited by the API for ${w}ms! Waiting 10s...`);
           this.printStats();
 
-          await wait(w * 2);
+          await wait(10000);
           return await this.search();
         } else {
           this.state.running = false;
@@ -888,13 +888,13 @@
           const w = (await resp.json()).retry_after * 1000;
           this.stats.throttledCount++;
           this.stats.throttledTotalTime += w;
-          this.options.deleteDelay += 50; // increase delay
+          //this.options.deleteDelay += 50; // increase delay
           log.warn(
-            `Being rate limited by the API for ${w}ms! Adjusted delete delay to ${this.options.deleteDelay}ms.`,
+            `Being rate limited by the API for ${w}ms!`,
           );
           this.printStats();
-          log.verb(`Cooling down for ${w * 2}ms before retrying...`);
-          await wait(w * 2);
+          log.verb(`Cooling down for 10s before retrying...`);
+          await wait(10000);
           return 'RETRY';
         } else {
           const body = await resp.text();
