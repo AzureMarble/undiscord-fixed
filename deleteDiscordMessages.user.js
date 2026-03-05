@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            Undiscord
 // @description     Delete all messages in a Discord channel or DM (Bulk deletion)
-// @version         5.2.8
+// @version         5.2.9
 // @author          victornpb - corrected by agblacky
 // @homepageURL     https://github.com/victornpb/undiscord
 // @supportURL      https://github.com/victornpb/undiscord/discussions
@@ -612,7 +612,7 @@
         // Avoid sending multiple search requests that don't return anything and potentially increasing speed
         if (!this.state._messagesToDelete.length > 0) {
           log.verb(`No messages found. Waiting 10s to avoid discords caching.`);
-          this.state.offset = 0;
+          this.state.offset += this.state._skippedMessages.length;
           await wait(8000);
           continue;
         }
