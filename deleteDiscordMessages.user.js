@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name            Undiscord
 // @description     Delete all messages in a Discord channel or DM (Bulk deletion)
-// @version         5.2.7
+// @version         5.2.8
 // @author          victornpb - corrected by agblacky
 // @homepageURL     https://github.com/victornpb/undiscord
 // @supportURL      https://github.com/victornpb/undiscord/discussions
@@ -449,7 +449,7 @@
   const escapeHTML = html =>
     String(html).replace(
       /[&<"']/g,
-      m => ({ '&': '&amp;', '<': '&lt;', '"': '&quot;', "'": '&#039;' }[m]),
+      m => ({ '&': '&amp;', '<': '&lt;', '"': '&quot;', "'": '&#039;' })[m],
     );
   const redact = str => `<x>${escapeHTML(str)}</x>`;
   const queryString = params =>
@@ -592,6 +592,7 @@
       this.skippedPages = 0;
 
       do {
+        await wait(this.options.searchDelay);
         this.state.iterations++;
 
         log.verb('Fetching messages...');
@@ -607,6 +608,14 @@
           `Skipped: ${this.state._skippedMessages.length})`,
           `offset: ${this.state.offset}`,
         );
+        // Reset offset and wait for discord to delete messages cache, then search again.
+        // Avoid sending multiple search requests that don't return anything and potentially increasing speed
+        if (!this.state._messagesToDelete.length > 0) {
+          log.verb(`No messages found. Waiting 10s to avoid discords caching.`);
+          this.state.offset = 0;
+          await wait(8000);
+          continue;
+        }
         this.printStats();
         // if there are messages to delete, delete them
         if (
@@ -625,7 +634,7 @@
               2,
             )}s before next page...`,
           );
-          await wait(this.options.searchDelay);
+          this.state.offset += this.state._skippedMessages.length;
         } else {
           this.state.running = false;
         }
@@ -889,9 +898,7 @@
           this.stats.throttledCount++;
           this.stats.throttledTotalTime += w;
           //this.options.deleteDelay += 50; // increase delay
-          log.warn(
-            `Being rate limited by the API for ${w}ms!`,
-          );
+          log.warn(`Being rate limited by the API for ${w}ms!`);
           this.printStats();
           log.verb(`Cooling down for 10s before retrying...`);
           await wait(10000);
@@ -909,7 +916,7 @@
               log.warn(
                 "Error deleting message (Thread is archived). Will increment offset so we don't search this in the next page...",
               );
-              //this.state.offset++;
+              this.state.offset++;
               this.state.failCount++;
               return 'FAIL_SKIP'; // Failed but we will skip it next time
             }
